@@ -1,6 +1,6 @@
 from json import JSONDecodeError
 
-import requests
+import httpx
 
 from energeasyapi.constants import BASE_URL
 from energeasyapi.exceptions import InvalidLogin
@@ -14,7 +14,7 @@ class EnergEasyAPI(object):
         self.username = username
         self.password = password
 
-        self.session = requests.session()
+        self.session = httpx.AsyncClient()
         # Fake user agent
         self.session.headers[
             'User-Agent'] = "Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:76.0) Gecko/20100101 Firefox/76.0"
@@ -26,14 +26,16 @@ class EnergEasyAPI(object):
         if self.login and self.password:
             self.login()
 
-    def login(self):
+    async def login(self):
+        self.logged = False
         url = "{}/user/login".format(BASE_URL)
         params = {
             "userId": self.username,
             "userPassword": self.password,
         }
 
-        response = self.session.post(url, data=params)
+        response = await self.session.post(url, data=params)
+        # print(response.content)
         try:
             response_payload = response.json()
         except JSONDecodeError:
@@ -43,32 +45,36 @@ class EnergEasyAPI(object):
             return True
         raise InvalidLogin()
 
-    def fetch_setup(self):
+    async def fetch_setup(self):
         if not self.logged:
             raise InvalidLogin
 
         url = "{}/api/enduser-mobile-web/enduserAPI/setup".format(BASE_URL)
-        self.setup_response = self.session.get(url).json()
+        response = await self.session.get(url)
+        if response.status_code < 200 or 300 < response.status_code:
+            await self.login()
+            return self.fetch_setup()
+        self.setup_response = response.json()
 
-    def get_id(self):
+    async def get_id(self):
         if not self.setup_response:
-            self.fetch_setup()
+            await self.fetch_setup()
         return self.setup_response["id"]
 
     def refresh_equipments(self):
         for eqp_data in self.setup_response['devices']:
             self.equipments.add(eqp_data)
 
-    def list_equipments(self):
+    async def list_equipments(self):
         if not self.setup_response:
-            self.fetch_setup()
+            await self.fetch_setup()
 
         if not self.equipments.devices:
             self.refresh_equipments()
 
         return self.equipments.list_devices()
 
-    def send_command(self, uri, command):
+    async def send_command(self, uri, command):
         url = "{}/api/enduser-mobile-web/enduserAPI/exec/apply".format(BASE_URL)
         payload = {
             "label": "identification",
@@ -82,4 +88,10 @@ class EnergEasyAPI(object):
             ],
             "internal": False
         }
-        return self.session.post(url, json=payload)
+        response = await self.session.post(url, json=payload)
+        # print(response, response.content)
+        if response.status_code == 401:
+            await self.login()
+            return self.send_command(uri, command)
+
+        return response
