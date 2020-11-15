@@ -124,8 +124,13 @@ class ClimateController(BaseDevice):
         self.preset = None
         self.preset_mode = None
 
+        self.to_update = None
+
+    def register_update_notification(self, function):
+        self.to_update = function
+
     def set_mode(self, mode):
-        return generate_command("setActiveMode", mode)
+        return self.url, generate_command("setActiveMode", mode)
 
     def set_auto_mode(self):
         return self.set_mode("auto")
@@ -134,7 +139,7 @@ class ClimateController(BaseDevice):
         return self.set_mode("manu")
 
     def set_operating_mode(self, mode):
-        return generate_command("setOperatingMode", mode)
+        return self.url, generate_command("setOperatingMode", mode)
 
     def set_cooling_mode(self):
         return self.set_operating_mode("cooling")
@@ -143,14 +148,14 @@ class ClimateController(BaseDevice):
         return self.set_operating_mode("heating")
 
     def set_comfort_temp(self, temperature):
-        return generate_command("setComfortTemperature", temperature)
+        return self.url, generate_command("setComfortTemperature", temperature)
 
     def set_eco_temp(self, temperature):
-        return generate_command("setEcoTemperature", temperature)
+        return self.url, generate_command("setEcoTemperature", temperature)
 
     def set_manu_temp_mode(self, mode):
         assert mode in ['comfort', 'eco', 'free', 'secured']
-        return generate_command("setManuAndSetPointModes", mode)
+        return self.url, generate_command("setManuAndSetPointModes", mode)
 
     def load_state(self, raw_state):
         for state in raw_state['states']:
@@ -182,3 +187,7 @@ class ClimateController(BaseDevice):
 
             elif name == 'core:BatteryState':
                 self.battery_state = value
+
+            # thermostat
+            elif name == "core:TemperatureState":
+                self.temperature = value
