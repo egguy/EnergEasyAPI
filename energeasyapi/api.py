@@ -39,7 +39,7 @@ class EnergEasyAPI(object):
         try:
             response_payload = response.json()
         except JSONDecodeError:
-            raise InvalidLogin
+            raise InvalidLogin()
         if response_payload.get("success", False) is True:
             self.logged = True
             return True
